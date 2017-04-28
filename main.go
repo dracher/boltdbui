@@ -20,8 +20,9 @@ var dbPath = flag.String("db",
 	"database absolute path")
 
 func main() {
-	app := iris.New()
+	flag.Parse()
 
+	app := iris.New()
 	db, err := bolt.Open(*dbPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		log.Fatal(err)
@@ -32,31 +33,10 @@ func main() {
 	app.Adapt(
 		iris.DevLogger(),
 		httprouter.New(),
-		view.HTML("./views", ".html"),
+		view.HTML("./frontend", ".html").Binary(Asset, AssetNames),
 		cors.New(cors.Options{AllowedOrigins: []string{"*"}}))
+	app.StaticEmbedded("/static", "./frontend/static", Asset, AssetNames)
 
-	app.Get("/", func(ctx *iris.Context) {
-		ctx.Render("index.html", iris.Map{"Title": "Page Title"}, iris.RenderOptions{"gzip": true})
-	})
-
-	api := app.Party("/api/v1")
-	{
-		api.Get("/r", backend.GetValHandler)
-
-		bucket := api.Party("/bucket")
-		{
-			bucket.Get("/", backend.ListBucketsHandler)
-
-			bucket.Get("/:name", backend.ListBucketByNameHandler)
-			bucket.Post("/:name", backend.CreateBucketHandler)
-			bucket.Delete("/:name", backend.DeleteBucketHandler)
-		}
-
-		db := api.Party("/db")
-		{
-			db.Get("/status", backend.StatusHandler)
-		}
-	}
-
+	backend.RegisterRouter(app)
 	app.Listen(":6300")
 }
